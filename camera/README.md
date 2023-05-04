@@ -1,4 +1,4 @@
-Scripts to control Canon cameras
+# Scripts to control Canon cameras
 
-Packages:
-'canoremote': https://github.com/pklaus/canoremote.
+## Packages:
+1. 'canoremote': https://github.com/pklaus/canoremote
