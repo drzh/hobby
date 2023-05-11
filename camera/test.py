@@ -57,3 +57,4 @@ if __name__ == "__main__":
     #if 1: subprocess.call(['bluetoothctl','disconnect',addr])
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run())
+    
