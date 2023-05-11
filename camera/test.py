@@ -50,7 +50,7 @@ async def run():
             print("Press shutter:", i)        
             await cr.state(MODE, Button.Release)
             await cr.state(MODE)
-            await asyncio.sleep(0.6)
+            await asyncio.sleep(0.7)
             i += 1
 
 if __name__ == "__main__":
