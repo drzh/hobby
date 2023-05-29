@@ -10,10 +10,10 @@ MODE=Mode.Immediate
 #MODE=Mode.Movie
 
 # SL2
-#addr = "00:9D:6B:78:C5:64"
+addr = "00:9D:6B:78:C5:64"
 
 # RP
-addr = "70:74:14:08:37:12"
+#addr = "70:74:14:08:37:12"
 
 # R
 #addr = "10:98:C3:32:B6:09"
