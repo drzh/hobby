@@ -50,10 +50,11 @@ async def run():
             print("Press shutter:", i)        
             await cr.state(MODE, Button.Release)
             await cr.state(MODE)
-            await asyncio.sleep(2.1)
+            await asyncio.sleep(0.7)
             i += 1
 
 if __name__ == "__main__":
     #if 1: subprocess.call(['bluetoothctl','disconnect',addr])
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run())
+    
