@@ -1,5 +1,5 @@
 # Usage: Trigger capture accroding to the time schedule given by the input file
-# Usage: python3 trigger_capture.py -i <input file> -b <bluetooth address>
+# Usage: python3 trigger_capture.py -i <input file> -b <bluetooth address> -t <Binary_test> -s <sleep time before the starting time>
 #       The input file should be a TSV file with the following columns (Time is in UTC):
 #       1. The start date in the format of YYYYMMDD
 #       2. The start time in the format of HHMMSS
@@ -20,6 +20,8 @@ from canoremote import CanoRemote, Button, Mode
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--input', dest = 'input', help = 'Input file')
 parser.add_argument('-b', '--bluetooth', dest = 'bluetooth', help = 'Bluetooth address')
+parser.add_argument('-t', '--test', dest = 'test', help = 'Binary test', type=bool, default=False, action=argparse.BooleanOptionalAction)
+parser.add_argument('-s', '--sleep', dest = 'sleep', help = 'Sleep time before the starting time', type=float, default=0.01)
 args = parser.parse_args()
 
 # Read the input file
@@ -71,23 +73,41 @@ async def trigger_plan(plan, addr):
         # Wait for 0.05 seconds
         await asyncio.sleep(0.05)
     
-        while True :
-            # Get the current time
-            now = datetime.datetime.utcnow()
-            # Check if the current time is in the plan
-            for item in plan :
-                start = item[0]
-                end = item[1]
-                interval = item[2]
+        for item in plan :
+            start = item[0]
+            end = item[1]
+            interval = item[2]
+            while True :
+                # Get the current time
+                now = datetime.datetime.utcnow()
+                #print("Current time: ", now.strftime('%Y %m %H:%M:%S'))
+
+                # Check if the current time is in the plan
                 if now >= start and now <= end :
-                    # Trigger the capture
-                    await cr.state(MODE, Button.Release)
-                    await cr.state(MODE)
+                    # check if it's in test mode
+                    if args.test:
+                        # Print the current time in 'HH:MM:SSsss' format
+                        print(now.strftime('%H:%M:%S.%f'), 'Trigger - Test', sep='\t')
+                    else:
+                        # Print the current time
+                        print(now.strftime('%H:%M:%S.%f'), 'Trigger', sep='\t')
+                        # Trigger the capture
+                        await cr.state(MODE, Button.Release)
+                        await cr.state(MODE)
                     # Sleep for the interval
                     await asyncio.sleep(interval)
-            # If the current time is later than the end time of the last item in the plan, exit
-            if now > plan[-1][1] :
-                break
+
+                # If the current time is earlier than the start time, sleep for args.sleep seconds
+                elif now < start :
+                    # Sleep for args.sleep seconds
+                    await asyncio.sleep(args.sleep)
+                else :
+                    # If the current time is later than the end time, exit
+                    break  
+
+            ## If the current time is later than the end time of the last item in the plan, exit
+            #if now > plan[-1][1] :
+                #break
 
 # Main function
 def main():
