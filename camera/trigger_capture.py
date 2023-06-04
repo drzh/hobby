@@ -27,32 +27,32 @@ args = parser.parse_args()
 # Read the input file
 def read_input_file(file):
     plan = []
-    with open(file, 'r') as f :
+    with open(file, 'r') as f:
         lines = f.readlines()
-        for line in lines :
+        for line in lines:
             # Skip the comment lines
-            if line[0] == '#' :
+            if line[0] == '#':
                 continue
             # Skip the empty lines
-            if line.strip() == '' :
+            if line.strip() == '':
                 continue
             # Parse the line
             line = line.strip()
             items = line.split('\t')
-            if len(items) < 5 :
+            if len(items) < 5:
                 print('Error: The line "{}" is invalid!'.format(line))
                 sys.exit(1)
             # Parse the start date and time
             start_date = items[0]
             # If the start date is '.', use the current date
-            if start_date == '.' :
+            if start_date == '.':
                 start_date = datetime.datetime.utcnow().strftime('%Y%m%d')
             start_time = items[1]
             start = datetime.datetime.strptime(start_date + start_time, '%Y%m%d%H%M%S')
             # Parse the end date and time
             end_date = items[2]
             # If the end date is '.', use the current date
-            if end_date == '.' :
+            if end_date == '.':
                 end_date = datetime.datetime.utcnow().strftime('%Y%m%d')
             end_time = items[3]
             end = datetime.datetime.strptime(end_date + end_time, '%Y%m%d%H%M%S')
@@ -73,17 +73,17 @@ async def trigger_plan(plan, addr):
         # Wait for 0.05 seconds
         await asyncio.sleep(0.05)
     
-        for item in plan :
+        for item in plan:
             start = item[0]
             end = item[1]
             interval = item[2]
-            while True :
+            while True:
                 # Get the current time
                 now = datetime.datetime.utcnow()
                 #print("Current time: ", now.strftime('%Y %m %H:%M:%S'))
 
                 # Check if the current time is in the plan
-                if now >= start and now <= end :
+                if now >= start and now <= end:
                     # check if it's in test mode
                     if args.test:
                         # Print the current time in 'HH:MM:SSsss' format
@@ -98,15 +98,15 @@ async def trigger_plan(plan, addr):
                     await asyncio.sleep(interval)
 
                 # If the current time is earlier than the start time, sleep for args.sleep seconds
-                elif now < start :
+                elif now < start:
                     # Sleep for args.sleep seconds
                     await asyncio.sleep(args.sleep)
-                else :
+                else:
                     # If the current time is later than the end time, exit
                     break  
 
             ## If the current time is later than the end time of the last item in the plan, exit
-            #if now > plan[-1][1] :
+            #if now > plan[-1][1]:
                 #break
 
 # Main function
