@@ -9,8 +9,11 @@ MODE=Mode.Immediate
 #MODE=Mode.Delay
 #MODE=Mode.Movie
 
+# 90D
+addr = "74:7A:90:AD:59:1A"
+
 # SL2
-addr = "00:9D:6B:78:C5:64"
+#addr = "00:9D:6B:78:C5:64"
 
 # RP
 #addr = "70:74:14:08:37:12"
@@ -50,7 +53,7 @@ async def run():
             print("Press shutter:", i)        
             await cr.state(MODE, Button.Release)
             await cr.state(MODE)
-            await asyncio.sleep(0.7)
+            await asyncio.sleep(0.5)
             i += 1
 
 if __name__ == "__main__":
