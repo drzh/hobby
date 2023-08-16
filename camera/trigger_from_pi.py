@@ -2,7 +2,7 @@
 Trigger the camera from the Raspberry Pi
 
 Usage:
-    python trigger_from_pi.py -t <FILE_timeplan> -p <PIN> --test
+    python trigger_from_pi.py -t <FILE_timeplan> -p <PIN> -b <sleep_between> -a <sleep_after> --test
 """
 
 #!/usr/bin/python
@@ -16,6 +16,8 @@ from timeplan import timeplan as timeplan
 parser = argparse.ArgumentParser(description='Trigger the camera from the Raspberry Pi')
 parser.add_argument('-t', '--timeplan', help='Timeplan file', required=True)
 parser.add_argument('-p', '--pin', help='GPIO pin', type=int, default=17)
+parser.add_argument('-b', '--sleep_between', help='Sleep between', type=float, default=0.02)
+parser.add_argument('-a', '--sleep_after', help='Sleep after', type=float, default=0.02)
 parser.add_argument('--test', help='Test mode', action='store_true')
 args = parser.parse_args()
 
@@ -36,7 +38,10 @@ def main():
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
 
-    timeplan(args.timeplan, func=trigger, test=args.test,  pin=args.pin, sleep_between=0.1, sleep_after=0.1)
+    timeplan(args.timeplan, func=trigger, test=args.test,  pin=args.pin, sleep_between=args.sleep_between, sleep_after=args.sleep_after)
+
+    # Clean up
+    GPIO.cleanup()
 
 # Call the main() function
 if __name__ == '__main__':
