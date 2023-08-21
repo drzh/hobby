@@ -2,7 +2,7 @@
 Trigger the camera from the Raspberry Pi
 
 Usage:
-    python trigger_from_pi.py -t <FILE_timeplan> -p <PIN> -b <sleep_between> -a <sleep_after> --test
+    python trigger_from_pi.py -t <FILE_timeplan> -p <PIN> -b <sleep_between> --test
 """
 
 #!/usr/bin/python
@@ -22,15 +22,13 @@ parser.add_argument('--test', help='Test mode', action='store_true')
 args = parser.parse_args()
 
 # Function trigger()
-def trigger(pin = 17, sleep_between = 0.02, sleep_after = 0.02):
+def trigger(pin = 17, sleep_between = 0.02):
     GPIO.setup(pin, GPIO.OUT)
     GPIO.output(pin,GPIO.HIGH)
     time.sleep(sleep_between)
 
     GPIO.output(pin,GPIO.OUT)
     GPIO.output(pin,GPIO.LOW)
-    time.sleep(sleep_after)
-
 
 # main()
 def main():
@@ -38,7 +36,7 @@ def main():
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
 
-    timeplan(args.timeplan, func=trigger, test=args.test,  pin=args.pin, sleep_between=args.sleep_between, sleep_after=args.sleep_after)
+    timeplan(args.timeplan, func=trigger, test=args.test,  pin=args.pin, sleep_between=args.sleep_between)
 
     # Clean up
     GPIO.cleanup()
