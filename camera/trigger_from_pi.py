@@ -36,7 +36,7 @@ def main():
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
 
-    timeplan(args.timeplan, func=trigger, test=args.test,  pin=args.pin, sleep_between=args.sleep_between)
+    timeplan(args.timeplan, func=trigger, test=args.test,  pin=args.pin)
 
     # Clean up
     GPIO.cleanup()
