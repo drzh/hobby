@@ -10,7 +10,7 @@ import os
 def read_timeplan(file_plan):
     """
     Read the timeplan file in the format:
-    YYYYMMDD\tHHMMSS\tHHMMSS\tHHMMSS\tseconds
+    YYYYMMDD\tHHMMSS\tHHMMSS\tHHMMSS\tseconds[interval]\tseconds[duration]
     """
     plan = []
     with open(file_plan, 'r') as f:
@@ -44,8 +44,10 @@ def read_timeplan(file_plan):
             end = datetime.datetime.strptime(end_date + end_time, '%Y%m%d%H%M%S')
             # Parse the interval
             interval = float(items[4])
+            # If there is 6th item, it's the duration
+            duration = float(items[5]) if len(items) > 5 else 0
             # Add the plan
-            plan.append([start, end, interval])
+            plan.append([start, end, interval, duration])
     return plan
  
 
@@ -55,6 +57,7 @@ def timeplan(file_plan, func, test=False, sleep=1, **kwargs):
         start = item[0]
         end = item[1]
         interval = item[2]
+        duration = item[3]
         while True:
             now = datetime.datetime.utcnow()
 
@@ -68,7 +71,7 @@ def timeplan(file_plan, func, test=False, sleep=1, **kwargs):
                     # Print the current time
                     print(now.strftime('%H:%M:%S.%f'), 'Trigger', sep='\t')
                     # Execute the function
-                    func(**kwargs)
+                    func(duration=duration, **kwargs)
                 # Sleep for seconds
                 time.sleep(interval)
 

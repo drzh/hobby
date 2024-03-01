@@ -16,16 +16,16 @@ from timeplan import timeplan as timeplan
 parser = argparse.ArgumentParser(description='Trigger the camera from the Raspberry Pi')
 parser.add_argument('-t', '--timeplan', help='Timeplan file', required=True)
 parser.add_argument('-p', '--pin', help='GPIO pin', type=int, default=17)
-parser.add_argument('-b', '--sleep_between', help='Sleep between', type=float, default=0.02)
-parser.add_argument('-a', '--sleep_after', help='Sleep after', type=float, default=0.02)
+#parser.add_argument('-b', '--sleep_between', help='Sleep between', type=float, default=0.02)
+#parser.add_argument('-a', '--sleep_after', help='Sleep after', type=float, default=0.02)
 parser.add_argument('--test', help='Test mode', action='store_true')
 args = parser.parse_args()
 
 # Function trigger()
-def trigger(pin = 17, sleep_between = 0.02):
+def trigger(pin = 17, duration = 0.02):
     GPIO.setup(pin, GPIO.OUT)
     GPIO.output(pin,GPIO.HIGH)
-    time.sleep(sleep_between)
+    time.sleep(duration)
 
     GPIO.output(pin,GPIO.OUT)
     GPIO.output(pin,GPIO.LOW)
