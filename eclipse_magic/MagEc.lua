@@ -172,9 +172,9 @@ ShutterShockDelayMS = 500		-- Value is in milliseconds!
 -- Partial phase settings.
 --
 PartialISO = 100
-PartialShutterSpeed = (1/500)
-PartialMarginTime = 15			-- Number of seconds after C1 or C3 and before C2 or C4 to start exposures
-PartialExposureCount = 150		-- Number of partial phase exposures before and after totality
+PartialShutterSpeed = (1/250)
+PartialMarginTime = 10			-- Number of seconds after C1 or C3 and before C2 or C4 to start exposures
+PartialExposureCount = 231		-- Number of partial phase exposures before and after totality
 PartialDoBkt = 1				-- Do you want to do exposure bracketing?  1 - yes, 0 - no
 PartialBktStep = 2				-- Number of f-stops in each step.  Can 0.333333, 1, 2, etc
 PartialBktCount = 1				-- How many brackets on each side of the neutral exposure?
@@ -215,7 +215,7 @@ C2BurstTime = 10
 C3BurstStartOffset = 5
 C3BurstTime = 10
 C23BurstISO = 100
-C23BurstShutterSpeed = (1/4000)
+C23BurstShutterSpeed = (1/2000)
 
 --
 -- Do a fast burst of exposures before C2 and after C3, to try to get the diamond ring.
@@ -247,8 +247,8 @@ RingBurstShutterSpeed = 1/30
 TotalityMinISO = 100
 TotalityMaxISO = 100
 TotalityPrefISO = 100
-TotalityMinShutterSpeed = (1/4000) -- (MinShutterSpeed is the *fastest* speed to use.)
-TotalityMaxShutterSpeed = 4 -- (MaxShutterSpeed is the *slowest*, longest speed used.)
+TotalityMinShutterSpeed = (1/2000) -- (MinShutterSpeed is the *fastest* speed to use.)
+TotalityMaxShutterSpeed = 8 -- (MaxShutterSpeed is the *slowest*, longest speed used.)
 TotalityExpStep = 2
 
 --
@@ -260,7 +260,7 @@ TotalityExpStep = 2
 -- off by default.
 --
 DoMaxExposures = 1		-- Number of (possibly bracketed) exposures to take at max-eclipse.
-MaxOffset = (4) 		-- How long before max eclipse to start these exposures.  You'll have to test
+MaxOffset = (8) 		-- How long before max eclipse to start these exposures.  You'll have to test
 						-- or use math to determine this value.  (Value is in seconds.)
 NumMaxExposures = 1
 DoMaxBrackets = 0		-- Brackets?
