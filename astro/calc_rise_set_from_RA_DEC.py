@@ -49,10 +49,16 @@ def calc_rise_set_from_RA_DEC(input_file, input_lon_lat, output_file):
 
             for j in range(len(lon_lat)):
                 observer = Observer(longitude=lon_lat[j][1]*u.deg, latitude=lon_lat[j][2]*u.deg)
-                rise_time = observer.target_rise_time(t, c, which='nearest')
-                print(comet_name, dt, ra, dec, position_name, lon_lat[j][1], lon_lat[j][2], 'rise', rise_time.iso, sep='\t')
-                set_time = observer.target_set_time(t, c, which='nearest')
-                print(comet_name, dt, ra, dec, position_name, lon_lat[j][1], lon_lat[j][2], 'set', set_time.iso, sep='\t')
+                #rise_time = observer.target_rise_time(t, c, which='nearest')
+                rise_time = observer.target_rise_time(t, c, which='previous')
+                print(comet_name, dt, ra, dec, position_name, lon_lat[j][1], lon_lat[j][2], 'rise', 'previous', rise_time.iso, sep='\t')
+                rise_time = observer.target_rise_time(t, c, which='next')
+                print(comet_name, dt, ra, dec, position_name, lon_lat[j][1], lon_lat[j][2], 'rise', 'next', rise_time.iso, sep='\t')
+                #set_time = observer.target_set_time(t, c, which='nearest')
+                set_time = observer.target_set_time(t, c, which='previous')
+                print(comet_name, dt, ra, dec, position_name, lon_lat[j][1], lon_lat[j][2], 'set', 'previous', set_time.iso, sep='\t')
+                set_time = observer.target_set_time(t, c, which='next')
+                print(comet_name, dt, ra, dec, position_name, lon_lat[j][1], lon_lat[j][2], 'set', 'next', set_time.iso, sep='\t')
 
 @click.command()
 @click.option('-i', '--input_file', type=click.Path(exists=True), help='Input tsv file containing the RA/DEC of the celestial objects', default='/dev/stdin')
