@@ -50,6 +50,8 @@ def calc_RA_DEC_from_elements(input_file, output_file):
 
                 t = ts.utc(yy, mm, dd)
                 ra, dec, distance = earth.at(t).observe(comet).radec()
+                ra = str(ra.to(unit='degree'))[:-4]
+                dec = str(dec.to(unit='degree'))[:-4]
                 print(comet_name, str(yy) + '-' + str(mm) + '-' + str(dd), ra, dec, sep='\t', file=of)
 
 
