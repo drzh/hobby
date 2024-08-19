@@ -42,10 +42,14 @@ def calc_moon_time(lat, lon, dstart, dend, tz, output):
             moonrise = observer.date.datetime().replace(tzinfo=timezone('UTC')).astimezone(timezone(tzone))
             observer.date = observer.next_transit(ephem.Moon())
             moontransit = observer.date.datetime().replace(tzinfo=timezone('UTC')).astimezone(timezone(tzone))
+            # Moon phase at transit
+            moon = ephem.Moon()
+            moon.compute(observer)
+            phase = moon.phase
             observer.date = observer.next_setting(ephem.Moon())
             moonset = observer.date.datetime().replace(tzinfo=timezone('UTC')).astimezone(timezone(tzone))
             print("moon_rise", moonrise.strftime(tfmt), sep='\t', file=f)
-            print("moon_transit", moontransit.strftime(tfmt), sep='\t', file=f)
+            print("moon_transit", moontransit.strftime(tfmt) + ' (phase=' + "%.1f" % phase + ')', sep='\t', file=f)
             print("moon_set", moonset.strftime(tfmt), sep='\t', file=f)
 
 if __name__ == '__main__':
