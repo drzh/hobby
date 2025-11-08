@@ -38,19 +38,36 @@ def calc_moon_time(lat, lon, dstart, dend, tz, output):
         # Print parameters
         print("# latitude=", lat, "; longitude=", lon, "; timezone=", tzone, sep='', file=f)
         while observer.date.datetime().strftime('%Y-%m-%d %H:%M:%S') <= dend:
+            # Rise
             observer.date = observer.next_rising(ephem.Moon())
             moonrise = observer.date.datetime().replace(tzinfo=timezone('UTC')).astimezone(timezone(tzone))
+
+            # Moon phase at rise
+            moon = ephem.Moon()
+            moon.compute(observer)
+            rise_phase = moon.phase
+
+            # Transit
             observer.date = observer.next_transit(ephem.Moon())
             moontransit = observer.date.datetime().replace(tzinfo=timezone('UTC')).astimezone(timezone(tzone))
+            
             # Moon phase at transit
             moon = ephem.Moon()
             moon.compute(observer)
-            phase = moon.phase
+            transit_phase = moon.phase
+
+            # Set
             observer.date = observer.next_setting(ephem.Moon())
             moonset = observer.date.datetime().replace(tzinfo=timezone('UTC')).astimezone(timezone(tzone))
-            print("moon_rise", moonrise.strftime(tfmt), sep='\t', file=f)
-            print("moon_transit", moontransit.strftime(tfmt) + ' (phase=' + "%.1f" % phase + ')', sep='\t', file=f)
-            print("moon_set", moonset.strftime(tfmt), sep='\t', file=f)
+
+            # Moon phase at set
+            moon = ephem.Moon()
+            moon.compute(observer)
+            set_phase = moon.phase
+
+            print("moon_rise", moonrise.strftime(tfmt), "%.1f" % rise_phase, sep='\t', file=f)
+            print("moon_transit", moontransit.strftime(tfmt), "%.1f" % transit_phase, sep='\t', file=f)
+            print("moon_set", moonset.strftime(tfmt), "%.1f" % set_phase, sep='\t', file=f)
 
 if __name__ == '__main__':
     calc_moon_time()

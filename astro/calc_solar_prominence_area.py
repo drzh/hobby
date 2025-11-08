@@ -106,8 +106,11 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk, intensity_cutoff, m
             plt.imshow(ff_data, cmap=cmap, origin="lower", aspect=1, norm=LogNorm(vmin=1, vmax=ff_data.max()))
             plt.axis('off')
             #plt.colorbar(label="Intensity")
-            plt.title(f"Solar Prominence (Intensity>{intensity_cutoff})", fontsize=8)
-            plt.savefig(plot_file, dpi=300, bbox_inches="tight")
+            #plt.title(f"Solar Prominence (Intensity>{intensity_cutoff})", fontsize=8)
+            # Add date and time to the bottom left corner
+            obs_time_str = ff_header.get('DATE-OBS', 'Unknown')
+            plt.text(1, 1, f"{obs_time_str}", color='white', fontsize=6, ha='left', va='bottom')
+            plt.savefig(plot_file, dpi=300, bbox_inches="tight", pad_inches=0)
             plt.close()
 
 
