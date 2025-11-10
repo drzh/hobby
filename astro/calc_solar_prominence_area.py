@@ -55,8 +55,10 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk, intensity_cutoff, m
 
         # Mask the sun disk (pixcel values within the sun radius)
         y, x = np.ogrid[:ylen, :xlen]
-        sun_disk_mask = (x - sun_center_x) ** 2 + (y - sun_center_y) ** 2 < (rsun_pixels + pixels_to_extend_for_sun_disk) ** 2
-        ff_data[sun_disk_mask] = 1  # Set the sun disk pixels to zero
+        rmask = rsun_pixels + pixels_to_extend_for_sun_disk
+        if rmask > 0:
+            sun_disk_mask = (x - sun_center_x) ** 2 + (y - sun_center_y) ** 2 < (rsun_pixels + pixels_to_extend_for_sun_disk) ** 2
+            ff_data[sun_disk_mask] = 1  # Set the sun disk pixels to zero
 
         # Find the maximum distance of pixels with intensity greater than the cutoff
         prominence_mask = ff_data > intensity_cutoff
@@ -109,6 +111,8 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk, intensity_cutoff, m
             #plt.title(f"Solar Prominence (Intensity>{intensity_cutoff})", fontsize=8)
             # Add date and time to the bottom left corner
             obs_time_str = ff_header.get('DATE-OBS', 'Unknown')
+            # Replace 'T' with space. Remove '.\d\d\d' if present
+            obs_time_str = obs_time_str.replace('T', '  ').split('.')[0]
             plt.text(1, 1, f"{obs_time_str}", color='white', fontsize=6, ha='left', va='bottom')
             plt.savefig(plot_file, dpi=300, bbox_inches="tight", pad_inches=0)
             plt.close()
