@@ -1,13 +1,14 @@
 """
-1. Grab a webpage from dallas.cragslist.org based on the URLs in the file
-2. Extract the item name, price, and URL for each item
+1. Grab a webpage based on the URLs in the file
+2. Extract the item information for each item
 3. Check whether the item is in the SQLite3 database
 4. If the item is not in the database, send an email via gmail to the user and add the item to the database
 
 Usage: python report.py -w <website_module> -u <URLs file> -d <database file>
 
 URLs file: A file containing the URLs to check, one per line
-Database file: A SQLite3 database file containing the items URLs that have already been checked
+Database file: A SQLite3 database file containing the items that have already been reported
+
 """
 
 import sys
