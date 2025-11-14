@@ -13,8 +13,6 @@ Database file: A SQLite3 database file containing the items that have already be
 
 import sys
 import urllib3
-import re
-import smtplib
 import os.path
 import argparse
 import importlib
