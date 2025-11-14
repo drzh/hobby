@@ -27,7 +27,7 @@ def get_items_from_html(surl, html, line = None):
             turl = surl + title_match.group(1).strip()
             tid = f"{title} - {date_str}"
             msg = f"{title} : {turl} : {date_str}"
-            rec.append([tid, msg])
+            rec.append([surl, tid, msg])
     return rec
 
 def get_email_title():

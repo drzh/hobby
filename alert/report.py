@@ -86,11 +86,12 @@ def main():
         # Loop through the items
         for item in items:
             # Check whether the item is in the database
-            result = db.select('ITEMS', where=f'ID="{item[0]}"')
+            where_clause = f'ID="{item[1]}"'
+            result = db.select('ITEMS', where=where_clause)
 
             # If the item is not in the database, add it to the record
             if result == []:
-                rec.append([surl] + item)
+                rec.append(item)
             
     # If there are new items, send an email to the user
     if len(rec) == 0:
@@ -109,7 +110,7 @@ def main():
             db.insert('ITEMS', ws.get_db_columns().keys(), item + [str(datetime.datetime.now())])
 
         # For each surl, only keep the latest 1000 records
-        db.keep_records('ITEMS', column_group='URL', column_order='TIME', number=1000)
+        db.keep_records('ITEMS', number=1000)
 
     # Close the database connection
     db.close()
