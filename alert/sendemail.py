@@ -8,15 +8,11 @@ To: celaenomail@gmail.com
 Subject: %s
 """ % subject
 
-    if type == 'plain':
-        msg += """\
-
-"""
-
-    msg += """\
-%s
-
-""" % text
+    if type == 'html':
+        msg += 'MIME-Version: 1.0\nContent-type: text/html\n\n'
+    else:
+        msg += '\n'
+    msg += text
 
     try:
         # Replace the non-ASCII characters with a space
