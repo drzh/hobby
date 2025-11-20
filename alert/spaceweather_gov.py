@@ -31,4 +31,4 @@ def get_items_from_html(surl, html, line = None):
     return rec
 
 def get_email_title():
-    return 'spaceweather.gov Alert '
+    return 'spaceweather.gov Alert'

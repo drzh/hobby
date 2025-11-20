@@ -86,6 +86,7 @@ def main():
         for item in items:
             # Remove unallowed characters from item ID
             item[1] = db.clean(item[1])
+            
             # Check whether the item is in the database
             where_clause = f'ID="{item[1]}"'
             result = db.select('ITEMS', where=where_clause)
