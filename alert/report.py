@@ -84,8 +84,10 @@ def main():
 
         # Loop through the items
         for item in items:
+            # Replace '"' with '""' in item[1] to prevent SQL injection
+            item_id = item[1].replace('"', '""')
             # Check whether the item is in the database
-            where_clause = f'ID="{item[1]}"'
+            where_clause = f'ID="{item_id}"'
             result = db.select('ITEMS', where=where_clause)
 
             # If the item is not in the database, add it to the record

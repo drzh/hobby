@@ -15,10 +15,8 @@ def get_items_from_html(surl, html, line = None):
     # Extract all '<p ...><strong>...</p>'
     items = re.findall(r'<p [^>]+>(<strong>.+?)</p>', html, re.MULTILINE|re.DOTALL)
     for item in items:
-        # Remove html tags from item
-        item = re.sub(r'<[^>]+>', '', item).strip()
         tid = item
-        msg = item
+        msg = item + '<br/><br/>'
         rec.append([surl, tid, msg])
     return rec
 

@@ -1,7 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 
-def sendemail(subject, text, type='plain'):
+def sendemail(subject, text, type='html'):
     msg = """\
 From: celaenomail@gmail.com
 To: celaenomail@gmail.com

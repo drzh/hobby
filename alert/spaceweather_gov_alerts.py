@@ -30,9 +30,12 @@ def get_items_from_html(surl, html, line = None):
 
         if tid and ttime and tmsg:
             tid = tid + '_' + ttime
-            msg = tmsg
-            # Replace '\r\n' with space
-            msg = re.sub(r'\\r\\n', ' | ', msg)
+            # display tmsg as <pre> with '\n' interpreted
+            msg = '<pre>' + tmsg.replace('\\r\\n', '\n') + '</pre>' + '<br/>'
+
+            # Replace '\/' with '/'
+            msg = msg.replace('\\/', '/')
+
             rec.append([surl, tid, msg])
     return rec
 
