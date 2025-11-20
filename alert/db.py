@@ -15,6 +15,19 @@ class DB:
         # If the database file does not exist, create it by opening a connection
         self.conn = sqlite3.connect(db_file)
 
+    def clean(self, text):
+        '''
+        Clean the text for database operations.
+        :param text: Input text
+        :return: Cleaned text
+        '''
+        if text is None:
+            return None
+        # Replace double quotes with two double quotes
+        # Define allowed_chars as ASCII letters, digits, ',', '.', '-', '_', and space
+        allowed_chars = re.compile(r'[^A-Za-z0-9,\.\-_ ]+')
+        return allowed_chars.sub('', text)
+
     def create_table(self, table, columns):
         '''
         Create a table if it does not exist.

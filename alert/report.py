@@ -84,10 +84,10 @@ def main():
 
         # Loop through the items
         for item in items:
-            # Replace '"' with '""' in item[1] to prevent SQL injection
-            item_id = item[1].replace('"', '""')
+            # Remove unallowed characters from item ID
+            item[1] = db.clean(item[1])
             # Check whether the item is in the database
-            where_clause = f'ID="{item_id}"'
+            where_clause = f'ID="{item[1]}"'
             result = db.select('ITEMS', where=where_clause)
 
             # If the item is not in the database, add it to the record
@@ -108,6 +108,8 @@ def main():
     if sendemail(ws.get_email_title(), msg):
         # Add the new items to the database
         for item in rec:
+            # Remove unallowed characters from item ID
+            item = [db.clean(field) for field in item]
             db.insert('ITEMS', ws.get_db_columns().keys(), item + [str(datetime.datetime.now())])
 
         # For each surl, only keep the latest 1000 records

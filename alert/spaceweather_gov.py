@@ -26,7 +26,7 @@ def get_items_from_html(surl, html, line = None):
             title = title_match.group(2).strip()
             turl = surl + title_match.group(1).strip()
             tid = f"{title} - {date_str}"
-            msg = f"{title} : {turl} : {date_str}"
+            msg = f"{title} : {turl} : {date_str}" + '<br/><br/>'
             rec.append([surl, tid, msg])
     return rec
 
