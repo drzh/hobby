@@ -34,8 +34,12 @@ def get_items_from_html(surl, html, line = None):
     rec = []
     for index, row in df.iterrows():
         tid = row['Time (UTC)']
+        # Reformat tid from 'DD-MM-YYYY HH:MM' to 'YYYY-MM-DD HH:MM'
+        tid_m = re.match(r'(\d{2})-(\d{2})-(\d{4}) (\d{2}:\d{2})', tid)
+        if tid_m:
+            tid = f"{tid_m.group(3)}-{tid_m.group(2)}-{tid_m.group(1)} {tid_m.group(4)}"
         kp_value = row['maximum']
-        msg = f"Aurora Alert: Kp={kp_value} at {tid} <br/><br/>"
+        msg = f"Maximum Kp = {kp_value} at {tid} <br/><br/>"
         rec.append([surl, tid, msg, str(kp_value)])
     
     return rec
