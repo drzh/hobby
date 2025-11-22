@@ -5,8 +5,7 @@ def get_db_columns():
     return {
         'URL': 'TEXT',
         'ID': 'TEXT',
-        'MSG': 'TEXT',
-        'TIME': 'TEXT'
+        'MSG': 'TEXT'
     }
 
 def get_items_from_html(surl, html, line = None):

@@ -60,8 +60,10 @@ def main():
     # Connect to the SQLite3 database
     db = DB(args.db_file)
 
-    # Create a table ITEMS if it does not exist, with columns SURL, TURL, NAME, PRICE, and TIME
-    db.create_table('ITEMS', ws.get_db_columns())
+    # Create a table ITEMS if it does not exist, with columns defined in the website module and an additional TIME column
+    db_columns = ws.get_db_columns()
+    db_columns['TIME'] = 'TEXT'
+    db.create_table('ITEMS', db_columns)
 
     # Read the URLs file, and skip the lines starting with # and empty lines
     rec = []
@@ -80,7 +82,7 @@ def main():
         html = get_html(surl)
 
         # Extract the items from the HTML
-        items = ws.get_items_from_html(surl, html, line)
+        items = ws.get_items_from_html(surl=surl, html=html, line=line)
 
         # Loop through the items
         for item in items:
@@ -91,15 +93,20 @@ def main():
             where_clause = f'ID="{item[1]}"'
             result = db.select('ITEMS', where=where_clause)
 
-            # If the item is not in the database, add it to the record
-            if result == []:
-                rec.append(item)
+            # If the website module has a compare_record function, use it to compare the records
+            if hasattr(ws, 'compare_record'):
+                if ws.compare_record(record=result, item=item, line=line):
+                    rec.append(item)
+            else:
+                # If the item is not in the database, add it to the record
+                if result == []:
+                    rec.append(item)
             
     # If there are new items, send an email to the user
     if len(rec) == 0:
         sys.exit(0)
         
-    # The subject of the email is 'CL Alert' and the body of the email is the list of new items
+    # Format the email message
     msg = '\n'
     for item in rec:
         # Format item[0] to HTML
@@ -111,7 +118,7 @@ def main():
         for item in rec:
             # Remove unallowed characters from item ID
             item = [db.clean(field) for field in item]
-            db.insert('ITEMS', ws.get_db_columns().keys(), item + [str(datetime.datetime.now())])
+            db.insert('ITEMS', db_columns.keys(), item + [str(datetime.datetime.now())])
 
         # For each surl, only keep the latest 1000 records
         db.keep_records('ITEMS', number=1000)

@@ -5,8 +5,7 @@ def get_db_columns():
     return {
         'URL': 'TEXT',
         'ID': 'TEXT',
-        'MSG': 'TEXT',
-        'TIME': 'TEXT'
+        'MSG': 'TEXT'
     }
 
 def get_items_from_html(surl, html, line = None):
@@ -16,7 +15,7 @@ def get_items_from_html(surl, html, line = None):
     items = re.findall(r'<p [^>]+>(<strong>.+?)</p>', html, re.MULTILINE|re.DOTALL)
     for item in items:
         tid = item
-        msg = item + '<br/><br/>'
+        msg = item + ' : ' + surl + '<br/><br/>'
         rec.append([surl, tid, msg])
     return rec
 
