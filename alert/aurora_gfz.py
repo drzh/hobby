@@ -27,8 +27,11 @@ def get_items_from_html(surl, html, line = None):
             except:
                 pass
 
-    # Keep only the rows where 'maximum' column is greater than or equal to kp_cutoff
-    df = df[pd.to_numeric(df['maximum'], errors='coerce') >= kp_cutoff]
+    # Set the column to be used as index
+    kp_col = 'median'
+
+    # Keep only the rows where kp_col column is greater than or equal to kp_cutoff
+    df = df[pd.to_numeric(df[kp_col], errors='coerce') >= kp_cutoff]
 
     # For each row in the filtered dataframe, create a record with 'Time (UTC)' and 'maximum' as a list
     rec = []
@@ -38,8 +41,8 @@ def get_items_from_html(surl, html, line = None):
         tid_m = re.match(r'(\d{2})-(\d{2})-(\d{4}) (\d{2}:\d{2})', tid)
         if tid_m:
             tid = f"{tid_m.group(3)}-{tid_m.group(2)}-{tid_m.group(1)} {tid_m.group(4)}"
-        kp_value = row['maximum']
-        msg = f"Maximum Kp = {kp_value} at {tid} <br/><br/>"
+        kp_value = row[kp_col]
+        msg = f"{kp_col} Kp = {kp_value} at {tid} <br/><br/>"
         rec.append([surl, tid, msg, str(kp_value)])
     
     return rec
