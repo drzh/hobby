@@ -41,11 +41,11 @@ def query_geomag(inputfile, outputfile, latcol, loncol, altcol, year):
                 response = requests.get(url)
                 if response.status_code == 200:
                     data = response.json()
-                    geomag_lat = data['data']['dipole']['latitude']
-                    geomag_lon = data['data']['dipole']['longitude']
+                    geomag_lat = data['data']['quasi-dipole']['latitude']
+                    geomag_lon = data['data']['quasi-dipole']['longitude']
                     
                     # Write the results to the output file
-                    outfile.write("\t".join(ele) + f"\t{geomag_lon}\t{geomag_lat}\n")
+                    outfile.write("\t".join(ele) + f"\t{geomag_lat}\t{geomag_lon}\n")
                 else:
                     # Handle HTTP errors to stderr
                     print(f"Error fetching data for lat: {lat}, lon: {lon}. HTTP Status Code: {response.status_code}", file=sys.stderr)
