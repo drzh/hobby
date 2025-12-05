@@ -2,7 +2,7 @@
 Read in a fits file containing the intensity of the sun's surface. It removes the sun disk and then calculates the area of solar prominences.
 
 Usage: 
-    python calc_solar_prominence_area.py -e <pixels_to_extend_for_sun_disk> -c <intensity_cutoff> -m <minimal_pixels_of_connected_region> -i <fits_file> -o <output_file> -w <plot_width> -h <plot_height> -p <plot_file> -d <output_data_file>
+    python calc_solar_prominence_area.py -e <pixels_to_extend_for_sun_disk> -c <intensity_cutoff> -m <minimal_pixels_of_connected_region> --cap <cap_value_of_the_intensity> -i <fits_file> -o <output_file> -w <plot_width> -h <plot_height> -p <plot_file> -d <output_data_file>
 
 '''
 
@@ -20,20 +20,25 @@ from datetime import datetime, timezone
 @click.option('-e', '--extend', 'pixels_to_extend_for_sun_disk', default=0, help='Number of pixels to extend the sun disk mask.')
 @click.option('-c', '--cutoff', 'intensity_cutoff', default=0, help='Intensity cutoff for prominence detection.')
 @click.option('-m', '--minimal', 'minimal_pixels_of_connected_region', default=1, help='Minimal number of pixels in a connected region to be considered a prominence.')
+@click.option('--cap', 'cap_value_of_the_intensity', default=None, type=float, help='Optional cap value for the intensity to limit extreme values.')
 @click.option('-w', '--width', 'plot_width', default=3, help='Width of the plot in inches.')
 @click.option('-h', '--height', 'plot_height', default=3, help='Height of the plot in inches.')
 @click.option('-i', '--input', 'fits_file', required=True, help='Input FITS file containing solar image data.')
-@click.option('-o', '--output', 'output_file', required=True, help='Output file to save the calculated prominence area.')
+@click.option('-o', '--output', 'output_file', default=None, help='Output file to save the calculated prominence area.')
 @click.option('-p', '--plot', 'plot_file', default=None, help='Optional plot file to save the prominence area visualization.')
 @click.option('-d', '--data', 'output_data_file', default=None, help='Optional file to save the output data.')
 
-def calculate_prominence_area(pixels_to_extend_for_sun_disk, intensity_cutoff, minimal_pixels_of_connected_region, plot_width, plot_height, fits_file, output_file, plot_file, output_data_file):
+def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=0, minimal_pixels_of_connected_region=1, cap_value_of_the_intensity=None, plot_width=3, plot_height=3, fits_file=None, output_file=None, plot_file=None, output_data_file=None):
     # Read the FITS file
     with fits.open(fits_file) as ff:
         #print(ff[1].header)
         #print(ff[1].data.shape)
         ff_header = ff[1].header
         ff_data = ff[1].data
+
+        # Cap the intensity values if specified
+        if cap_value_of_the_intensity is not None:
+            ff_data = np.minimum(ff_data, cap_value_of_the_intensity)
 
         # Export the data to a file if specified
         if output_data_file:
@@ -86,17 +91,18 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk, intensity_cutoff, m
             prominence_max_distance = np.max(np.sqrt((x_indices - sun_center_x) ** 2 + (y_indices - sun_center_y) ** 2)) - rsun_pixels
 
         # Output the values
-        with open(output_file, 'w') as f:
-            # Print current time in the format '2025-08-21T04:32:53.130'
-            f.write(f"current_time\t{datetime.now(timezone.utc).isoformat()}\n")
-            f.write(f"obs_time\t{ff_header.get('DATE-OBS', 'Unknown')}\n")
-            f.write(f"pixels_to_extend_for_sun_disk\t{pixels_to_extend_for_sun_disk}\n")
-            f.write(f"intensity_cutoff\t{intensity_cutoff}\n")
-            f.write(f"sun_center_x\t{sun_center_x}\n")
-            f.write(f"sun_center_y\t{sun_center_y}\n")
-            f.write(f"sun_radius_pixels\t{rsun_pixels:.1f}\n")
-            f.write(f"prominence_area_pixels\t{bright_pixels:.1f}\n")
-            f.write(f"prominence_max_distance_pixels\t{prominence_max_distance:.1f}\n")
+        if output_file:
+            with open(output_file, 'w') as f:
+                # Print current time in the format '2025-08-21T04:32:53.130'
+                f.write(f"current_time\t{datetime.now(timezone.utc).isoformat()}\n")
+                f.write(f"obs_time\t{ff_header.get('DATE-OBS', 'Unknown')}\n")
+                f.write(f"pixels_to_extend_for_sun_disk\t{pixels_to_extend_for_sun_disk}\n")
+                f.write(f"intensity_cutoff\t{intensity_cutoff}\n")
+                f.write(f"sun_center_x\t{sun_center_x}\n")
+                f.write(f"sun_center_y\t{sun_center_y}\n")
+                f.write(f"sun_radius_pixels\t{rsun_pixels:.1f}\n")
+                f.write(f"prominence_area_pixels\t{bright_pixels:.1f}\n")
+                f.write(f"prominence_max_distance_pixels\t{prominence_max_distance:.1f}\n")
 
         # Plot the fits_data
         if plot_file:
