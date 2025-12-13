@@ -36,6 +36,9 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
         ff_header = ff[1].header
         ff_data = ff[1].data
 
+        # Get the statistics of the data
+        intensity_max = np.nanmax(ff_data)
+
         # Cap the intensity values if specified
         if cap_value_of_the_intensity is not None:
             ff_data = np.minimum(ff_data, cap_value_of_the_intensity)
@@ -97,6 +100,7 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
                 f.write(f"current_time\t{datetime.now(timezone.utc).isoformat()}\n")
                 f.write(f"obs_time\t{ff_header.get('DATE-OBS', 'Unknown')}\n")
                 f.write(f"pixels_to_extend_for_sun_disk\t{pixels_to_extend_for_sun_disk}\n")
+                f.write(f"intensity_max\t{intensity_max}\n")
                 f.write(f"intensity_cutoff\t{intensity_cutoff}\n")
                 f.write(f"sun_center_x\t{sun_center_x}\n")
                 f.write(f"sun_center_y\t{sun_center_y}\n")
