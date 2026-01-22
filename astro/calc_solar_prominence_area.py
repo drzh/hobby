@@ -115,7 +115,9 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
             
             plt.figure(figsize=(plot_width, plot_height))
             cmap = color_tables.aia_color_table(304 * u.angstrom)
-            plt.imshow(ff_data, cmap=cmap, origin="lower", aspect=1, norm=LogNorm(vmin=1, vmax=ff_data.max()))
+            #plt.imshow(ff_data, cmap=cmap, origin="lower", aspect=1, norm=LogNorm(vmin=1, vmax=ff_data.max()))
+            vmax = cap_value_of_the_intensity if cap_value_of_the_intensity is not None else ff_data.max()
+            plt.imshow(ff_data, cmap=cmap, origin="lower", aspect=1, norm=LogNorm(vmin=1, vmax=vmax))
             plt.axis('off')
             #plt.colorbar(label="Intensity")
             #plt.title(f"Solar Prominence (Intensity>{intensity_cutoff})", fontsize=8)
