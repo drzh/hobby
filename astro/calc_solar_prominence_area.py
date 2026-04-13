@@ -10,10 +10,7 @@ import click
 import numpy as np
 from astropy.io import fits
 from astropy import units as u
-from astropy.coordinates import SkyCoord
 from scipy import ndimage
-from sunpy.coordinates import frames
-from sunpy.map import Map, maputils
 from sunpy.visualization.colormaps import color_tables
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -49,22 +46,11 @@ def add_obs_time_text(ax, obs_time_str, color='white', alpha=1.0):
     )
 
 
-def sample_heliographic_line(solar_map, longitudes_deg, latitudes_deg):
-    radius = np.full(len(longitudes_deg), solar_map.rsun_meters.to_value(u.m)) * u.m
-    hgs = SkyCoord(
-        lon=np.asarray(longitudes_deg) * u.deg,
-        lat=np.asarray(latitudes_deg) * u.deg,
-        radius=radius,
-        frame=frames.HeliographicStonyhurst,
-        obstime=solar_map.date,
-    )
-    hpc = hgs.transform_to(solar_map.coordinate_frame)
-    visible = maputils.coordinate_is_on_solar_disk(hpc)
-    pixel_x, pixel_y = solar_map.world_to_pixel(hpc)
-    pixel_x = np.asarray(pixel_x.value, dtype=float)
-    pixel_y = np.asarray(pixel_y.value, dtype=float)
-    pixel_x[~visible] = np.nan
-    pixel_y[~visible] = np.nan
+def sample_equatorial_line(longitudes_deg, latitudes_deg, sun_center_x, sun_center_y, sun_radius_pixels):
+    longitude_radians = np.deg2rad(np.asarray(longitudes_deg, dtype=float))
+    latitude_radians = np.deg2rad(np.asarray(latitudes_deg, dtype=float))
+    pixel_x = sun_center_x + sun_radius_pixels * np.cos(latitude_radians) * np.sin(longitude_radians)
+    pixel_y = sun_center_y + sun_radius_pixels * np.sin(latitude_radians)
     return pixel_x, pixel_y
 
 
@@ -129,8 +115,13 @@ def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg):
 
 
 def plot_lat_lon_overlay(ax, ff_data, ff_header):
-    solar_map = Map(ff_data, ff_header)
     ylen, xlen = ff_data.shape
+    sun_center_x = ff_header['CRPIX1'] - 1
+    sun_center_y = ff_header['CRPIX2'] - 1
+    rsun_arcsec = ff_header['RSUN_OBS']
+    cdelt1 = ff_header['CDELT1']
+    cdelt2 = ff_header['CDELT2']
+    rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
 
     ax.imshow(np.zeros_like(ff_data), origin='lower', aspect=1, alpha=0)
     ax.set_xlim(-0.5, xlen - 0.5)
@@ -147,10 +138,12 @@ def plot_lat_lon_overlay(ax, ff_data, ff_header):
     )
 
     for latitude in grid_values:
-        pixel_x, pixel_y = sample_heliographic_line(
-            solar_map,
+        pixel_x, pixel_y = sample_equatorial_line(
             longitude_samples,
             np.full(longitude_samples.shape, latitude, dtype=float),
+            sun_center_x,
+            sun_center_y,
+            rsun_pixels,
         )
         ax.plot(
             pixel_x,
@@ -163,10 +156,12 @@ def plot_lat_lon_overlay(ax, ff_data, ff_header):
         label_latitude_line(ax, pixel_x, pixel_y, latitude)
 
     for longitude in grid_values:
-        pixel_x, pixel_y = sample_heliographic_line(
-            solar_map,
+        pixel_x, pixel_y = sample_equatorial_line(
             np.full(latitude_samples.shape, longitude, dtype=float),
             latitude_samples,
+            sun_center_x,
+            sun_center_y,
+            rsun_pixels,
         )
         ax.plot(
             pixel_x,
@@ -179,12 +174,6 @@ def plot_lat_lon_overlay(ax, ff_data, ff_header):
         label_longitude_line(ax, pixel_x, pixel_y, longitude, latitude_samples)
 
     limb_theta = np.linspace(0, 2 * np.pi, 1441)
-    sun_center_x = ff_header['CRPIX1'] - 1
-    sun_center_y = ff_header['CRPIX2'] - 1
-    rsun_arcsec = ff_header['RSUN_OBS']
-    cdelt1 = ff_header['CDELT1']
-    cdelt2 = ff_header['CDELT2']
-    rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
     ax.plot(
         sun_center_x + rsun_pixels * np.cos(limb_theta),
         sun_center_y + rsun_pixels * np.sin(limb_theta),
