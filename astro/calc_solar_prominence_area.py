@@ -54,6 +54,18 @@ def sample_equatorial_line(longitudes_deg, latitudes_deg, sun_center_x, sun_cent
     return pixel_x, pixel_y
 
 
+def pixel_axis_to_angle_degrees(pixel_coordinate, sun_center_coordinate, sun_radius_pixels):
+    if (
+        pixel_coordinate < 0
+        or sun_radius_pixels <= 0
+        or not np.all(np.isfinite([pixel_coordinate, sun_center_coordinate, sun_radius_pixels]))
+    ):
+        return np.nan
+
+    normalized_coordinate = (pixel_coordinate - sun_center_coordinate) / sun_radius_pixels
+    return float(np.rad2deg(np.arcsin(np.clip(normalized_coordinate, -1.0, 1.0))))
+
+
 def format_degree_label(value):
     if value > 0:
         return f'+{int(value)}\N{DEGREE SIGN}'
@@ -214,8 +226,15 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
         ff_header = ff[1].header
         ff_data = ff[1].data
 
-        # Get the statistics of the data
-        intensity_max = np.nanmax(ff_data)
+        # Record the original max before cap and mask operations mutate the data.
+        if np.all(np.isnan(ff_data)):
+            intensity_max = np.nan
+            intensity_max_pixel_x = -1
+            intensity_max_pixel_y = -1
+        else:
+            intensity_max = np.nanmax(ff_data)
+            intensity_max_index = int(np.nanargmax(ff_data))
+            intensity_max_pixel_y, intensity_max_pixel_x = np.unravel_index(intensity_max_index, ff_data.shape)
 
         # Cap the intensity values if specified
         if cap_value_of_the_intensity is not None:
@@ -238,6 +257,8 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
         cdelt1 = ff_header['CDELT1']
         cdelt2 = ff_header['CDELT2']
         rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
+        intensity_max_longitude = pixel_axis_to_angle_degrees(intensity_max_pixel_x, sun_center_x, rsun_pixels)
+        intensity_max_latitude = pixel_axis_to_angle_degrees(intensity_max_pixel_y, sun_center_y, rsun_pixels)
 
         # Mask the sun disk (pixcel values within the sun radius)
         y, x = np.ogrid[:ylen, :xlen]
@@ -279,6 +300,10 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
                 f.write(f"obs_time\t{ff_header.get('DATE-OBS', 'Unknown')}\n")
                 f.write(f"pixels_to_extend_for_sun_disk\t{pixels_to_extend_for_sun_disk}\n")
                 f.write(f"intensity_max\t{intensity_max}\n")
+                f.write(f"intensity_max_pixel_x\t{intensity_max_pixel_x}\n")
+                f.write(f"intensity_max_pixel_y\t{intensity_max_pixel_y}\n")
+                f.write(f"intensity_max_longitude\t{intensity_max_longitude:.1f}\n")
+                f.write(f"intensity_max_latitude\t{intensity_max_latitude:.1f}\n")
                 f.write(f"intensity_cutoff\t{intensity_cutoff}\n")
                 f.write(f"sun_center_x\t{sun_center_x}\n")
                 f.write(f"sun_center_y\t{sun_center_y}\n")
