@@ -14,6 +14,7 @@ from scipy import ndimage
 from sunpy.visualization.colormaps import color_tables
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.patches import Rectangle
 from datetime import datetime, timezone
 
 
@@ -27,6 +28,10 @@ OVERLAY_LABEL_ALPHA = 0.55
 OVERLAY_LABEL_FONT_SIZE = 4.0
 OVERLAY_LABEL_PADDING = 10
 OVERLAY_LONGITUDE_LABEL_LATITUDE = 0
+OVERLAY_MAX_MARKER_COLOR = OVERLAY_LINE_COLOR
+OVERLAY_MAX_MARKER_SIZE_PIXELS = 20
+OVERLAY_MAX_MARKER_LINE_WIDTH = 0.8
+OVERLAY_MAX_MARKER_ALPHA = 0.95
 
 
 def format_obs_time(obs_time_str):
@@ -54,16 +59,26 @@ def sample_equatorial_line(longitudes_deg, latitudes_deg, sun_center_x, sun_cent
     return pixel_x, pixel_y
 
 
-def pixel_axis_to_angle_degrees(pixel_coordinate, sun_center_coordinate, sun_radius_pixels):
+def pixel_to_overlay_lat_lon_degrees(pixel_x, pixel_y, sun_center_x, sun_center_y, sun_radius_pixels):
     if (
-        pixel_coordinate < 0
+        pixel_x < 0
+        or pixel_y < 0
         or sun_radius_pixels <= 0
-        or not np.all(np.isfinite([pixel_coordinate, sun_center_coordinate, sun_radius_pixels]))
+        or not np.all(np.isfinite([pixel_x, pixel_y, sun_center_x, sun_center_y, sun_radius_pixels]))
     ):
-        return np.nan
+        return np.nan, np.nan
 
-    normalized_coordinate = (pixel_coordinate - sun_center_coordinate) / sun_radius_pixels
-    return float(np.rad2deg(np.arcsin(np.clip(normalized_coordinate, -1.0, 1.0))))
+    normalized_y = (pixel_y - sun_center_y) / sun_radius_pixels
+    latitude_radians = np.arcsin(np.clip(normalized_y, -1.0, 1.0))
+    cos_latitude = np.cos(latitude_radians)
+    if abs(cos_latitude) < 1e-12:
+        longitude_degrees = np.nan
+    else:
+        normalized_x = (pixel_x - sun_center_x) / (sun_radius_pixels * cos_latitude)
+        longitude_degrees = float(np.rad2deg(np.arcsin(np.clip(normalized_x, -1.0, 1.0))))
+
+    latitude_degrees = float(np.rad2deg(latitude_radians))
+    return longitude_degrees, latitude_degrees
 
 
 def format_degree_label(value):
@@ -195,6 +210,29 @@ def plot_lat_lon_overlay(ax, ff_data, ff_header):
     )
 
 
+def add_overlay_max_marker(ax, pixel_x, pixel_y):
+    if (
+        pixel_x < 0
+        or pixel_y < 0
+        or not np.all(np.isfinite([pixel_x, pixel_y]))
+    ):
+        return
+
+    half_size = OVERLAY_MAX_MARKER_SIZE_PIXELS / 2
+    ax.add_patch(
+        Rectangle(
+            (pixel_x - half_size, pixel_y - half_size),
+            OVERLAY_MAX_MARKER_SIZE_PIXELS,
+            OVERLAY_MAX_MARKER_SIZE_PIXELS,
+            fill=False,
+            edgecolor=OVERLAY_MAX_MARKER_COLOR,
+            linewidth=OVERLAY_MAX_MARKER_LINE_WIDTH,
+            alpha=OVERLAY_MAX_MARKER_ALPHA,
+            clip_on=True,
+        )
+    )
+
+
 def save_plot(fig, output_path, transparent=False):
     fig.savefig(
         output_path,
@@ -248,17 +286,22 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
         xlen = ff_header['NAXIS1']
         ylen = ff_header['NAXIS2']
 
-        # Extract the center of the sun from 'CRPIX1' and 'CRPIX2'
-        sun_center_x = ff_header['CRPIX1']
-        sun_center_y = ff_header['CRPIX2']
+        # FITS CRPIX values are 1-based, while NumPy indices and the overlay are 0-based.
+        sun_center_x = ff_header['CRPIX1'] - 1
+        sun_center_y = ff_header['CRPIX2'] - 1
 
         # Calculate the radius of the sun in pixels
         rsun_arcsec = ff_header['RSUN_OBS']  # Radius of the sun in arcseco
         cdelt1 = ff_header['CDELT1']
         cdelt2 = ff_header['CDELT2']
         rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
-        intensity_max_longitude = pixel_axis_to_angle_degrees(intensity_max_pixel_x, sun_center_x, rsun_pixels)
-        intensity_max_latitude = pixel_axis_to_angle_degrees(intensity_max_pixel_y, sun_center_y, rsun_pixels)
+        intensity_max_longitude, intensity_max_latitude = pixel_to_overlay_lat_lon_degrees(
+            intensity_max_pixel_x,
+            intensity_max_pixel_y,
+            sun_center_x,
+            sun_center_y,
+            rsun_pixels,
+        )
 
         # Mask the sun disk (pixcel values within the sun radius)
         y, x = np.ogrid[:ylen, :xlen]
@@ -334,6 +377,7 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
             fig.patch.set_alpha(0)
             ax.patch.set_alpha(0)
             plot_lat_lon_overlay(ax, ff_data, ff_header)
+            add_overlay_max_marker(ax, intensity_max_pixel_x, intensity_max_pixel_y)
             # Keep the invisible timestamp footprint so the saved overlay matches the main image size.
             add_obs_time_text(ax, ff_header.get('DATE-OBS', 'Unknown'), alpha=0)
             save_plot(fig, overlay_plot_file, transparent=True)
