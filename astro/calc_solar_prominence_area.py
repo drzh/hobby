@@ -29,7 +29,7 @@ OVERLAY_LABEL_FONT_SIZE = 4.0
 OVERLAY_LABEL_PADDING = 10
 OVERLAY_LONGITUDE_LABEL_LATITUDE = 0
 OVERLAY_MAX_MARKER_COLOR = OVERLAY_LINE_COLOR
-OVERLAY_MAX_MARKER_SIZE_PIXELS = 21
+OVERLAY_MAX_MARKER_LENGTH_PIXELS = 20
 OVERLAY_MAX_MARKER_LINE_WIDTH = 0.8
 OVERLAY_MAX_MARKER_ALPHA = 0.95
 
@@ -218,12 +218,15 @@ def add_overlay_max_marker(ax, pixel_x, pixel_y):
     ):
         return
 
-    half_size = OVERLAY_MAX_MARKER_SIZE_PIXELS / 2
+    marker_half_length = OVERLAY_MAX_MARKER_LENGTH_PIXELS / 2
     ax.add_patch(
         Rectangle(
-            (pixel_x - half_size, pixel_y - half_size),
-            OVERLAY_MAX_MARKER_SIZE_PIXELS,
-            OVERLAY_MAX_MARKER_SIZE_PIXELS,
+            (
+                pixel_x - marker_half_length,
+                pixel_y - marker_half_length,
+            ),
+            OVERLAY_MAX_MARKER_LENGTH_PIXELS,
+            OVERLAY_MAX_MARKER_LENGTH_PIXELS,
             fill=False,
             edgecolor=OVERLAY_MAX_MARKER_COLOR,
             linewidth=OVERLAY_MAX_MARKER_LINE_WIDTH,
