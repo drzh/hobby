@@ -2,7 +2,7 @@
 Read in a fits file containing the intensity of the sun's surface. It removes the sun disk and then calculates the area of solar prominences.
 
 Usage: 
-    python calc_solar_prominence_area.py -e <pixels_to_extend_for_sun_disk> -c <intensity_cutoff> -m <minimal_pixels_of_connected_region> --cap <cap_value_of_the_intensity> -i <fits_file> -o <output_file> -w <plot_width> -h <plot_height> -p <plot_file> --overlay <overlay_plot_file> -d <output_data_file>
+    python calc_solar_prominence_area.py -e <pixels_to_extend_for_sun_disk> -c <intensity_cutoff> -m <minimal_pixels_of_connected_region> --cap <cap_value_of_the_intensity> -i <fits_file> -o <output_file> -w <plot_width> -h <plot_height> -p <plot_file> --layout <layout_plot_file> --carrington <carrington_plot_file> -d <output_data_file>
 
 '''
 
@@ -29,7 +29,8 @@ OVERLAY_LABEL_FONT_SIZE = 4.0
 OVERLAY_LABEL_PADDING = 10
 OVERLAY_LONGITUDE_LABEL_LATITUDE = 0
 OVERLAY_MAX_MARKER_COLOR = OVERLAY_LINE_COLOR
-OVERLAY_MAX_MARKER_LENGTH_PIXELS = 20
+OVERLAY_MAX_MARKER_RADIUS_PIXELS = 10
+OVERLAY_MAX_MARKER_LENGTH_PIXELS = OVERLAY_MAX_MARKER_RADIUS_PIXELS * 2 + 1
 OVERLAY_MAX_MARKER_LINE_WIDTH = 0.8
 OVERLAY_MAX_MARKER_ALPHA = 0.95
 
@@ -57,6 +58,54 @@ def sample_equatorial_line(longitudes_deg, latitudes_deg, sun_center_x, sun_cent
     pixel_x = sun_center_x + sun_radius_pixels * np.cos(latitude_radians) * np.sin(longitude_radians)
     pixel_y = sun_center_y + sun_radius_pixels * np.sin(latitude_radians)
     return pixel_x, pixel_y
+
+
+def wrap_longitude_delta_degrees(longitudes_deg, center_longitude_deg):
+    return (np.asarray(longitudes_deg, dtype=float) - center_longitude_deg + 180) % 360 - 180
+
+
+def sample_carrington_line(
+    longitudes_deg,
+    latitudes_deg,
+    sun_center_x,
+    sun_center_y,
+    sun_radius_pixels,
+    carrington_center_longitude,
+    observer_latitude,
+    rotation_degrees=0,
+):
+    longitude_delta_radians = np.deg2rad(wrap_longitude_delta_degrees(longitudes_deg, carrington_center_longitude))
+    latitude_radians = np.deg2rad(np.asarray(latitudes_deg, dtype=float))
+    observer_latitude_radians = np.deg2rad(observer_latitude)
+
+    cos_latitude = np.cos(latitude_radians)
+    sin_latitude = np.sin(latitude_radians)
+    cos_observer_latitude = np.cos(observer_latitude_radians)
+    sin_observer_latitude = np.sin(observer_latitude_radians)
+    cos_longitude_delta = np.cos(longitude_delta_radians)
+
+    offset_x = sun_radius_pixels * cos_latitude * np.sin(longitude_delta_radians)
+    offset_y = sun_radius_pixels * (
+        sin_latitude * cos_observer_latitude
+        - cos_latitude * cos_longitude_delta * sin_observer_latitude
+    )
+    visible = (
+        sin_latitude * sin_observer_latitude
+        + cos_latitude * cos_longitude_delta * cos_observer_latitude
+    ) >= 0
+
+    rotation_radians = np.deg2rad(rotation_degrees)
+    if rotation_radians != 0:
+        rotated_x = offset_x * np.cos(rotation_radians) - offset_y * np.sin(rotation_radians)
+        rotated_y = offset_x * np.sin(rotation_radians) + offset_y * np.cos(rotation_radians)
+    else:
+        rotated_x = offset_x
+        rotated_y = offset_y
+
+    pixel_x = sun_center_x + rotated_x
+    pixel_y = sun_center_y + rotated_y
+    visible &= np.isfinite(pixel_x) & np.isfinite(pixel_y)
+    return np.where(visible, pixel_x, np.nan), np.where(visible, pixel_y, np.nan)
 
 
 def pixel_to_overlay_lat_lon_degrees(pixel_x, pixel_y, sun_center_x, sun_center_y, sun_radius_pixels):
@@ -89,6 +138,10 @@ def format_degree_label(value):
     return f'0\N{DEGREE SIGN}'
 
 
+def format_carrington_degree_label(value):
+    return f'{int(round(value % 360))}\N{DEGREE SIGN}'
+
+
 def add_overlay_label(ax, x, y, label, ha, va):
     ax.text(
         x,
@@ -103,7 +156,7 @@ def add_overlay_label(ax, x, y, label, ha, va):
     )
 
 
-def label_latitude_line(ax, pixel_x, pixel_y, latitude):
+def label_latitude_line(ax, pixel_x, pixel_y, latitude, label=None):
     valid = np.isfinite(pixel_x) & np.isfinite(pixel_y)
     if not np.any(valid):
         return
@@ -113,13 +166,13 @@ def label_latitude_line(ax, pixel_x, pixel_y, latitude):
         ax,
         pixel_x[first_idx] + OVERLAY_LABEL_PADDING,
         pixel_y[first_idx],
-        format_degree_label(latitude),
+        label or format_degree_label(latitude),
         ha='left',
         va='center',
     )
 
 
-def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg):
+def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg, label=None):
     valid = np.isfinite(pixel_x) & np.isfinite(pixel_y)
     if not np.any(valid):
         return
@@ -135,7 +188,7 @@ def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg):
         ax,
         pixel_x[top_idx],
         pixel_y[top_idx] + OVERLAY_LABEL_PADDING,
-        format_degree_label(longitude),
+        label or format_degree_label(longitude),
         ha='center',
         va='bottom',
     )
@@ -210,6 +263,97 @@ def plot_lat_lon_overlay(ax, ff_data, ff_header):
     )
 
 
+def plot_carrington_overlay(ax, ff_data, ff_header):
+    ylen, xlen = ff_data.shape
+    sun_center_x = ff_header['CRPIX1'] - 1
+    sun_center_y = ff_header['CRPIX2'] - 1
+    rsun_arcsec = ff_header['RSUN_OBS']
+    cdelt1 = ff_header['CDELT1']
+    cdelt2 = ff_header['CDELT2']
+    rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
+    carrington_center_longitude = ff_header['CRLN_OBS']
+    observer_latitude = ff_header['CRLT_OBS']
+    rotation_degrees = ff_header.get('CROTA2', 0) or 0
+
+    ax.imshow(np.zeros_like(ff_data), origin='lower', aspect=1, alpha=0)
+    ax.set_xlim(-0.5, xlen - 0.5)
+    ax.set_ylim(-0.5, ylen - 0.5)
+    ax.set_aspect(1)
+    ax.axis('off')
+
+    latitude_samples = np.linspace(-90, 90, 721)
+    longitude_samples = carrington_center_longitude + np.linspace(-180, 180, 1441)
+    grid_values = range(
+        -90 + OVERLAY_GRID_SPACING_DEGREES,
+        90,
+        OVERLAY_GRID_SPACING_DEGREES,
+    )
+
+    for latitude in grid_values:
+        pixel_x, pixel_y = sample_carrington_line(
+            longitude_samples,
+            np.full(longitude_samples.shape, latitude, dtype=float),
+            sun_center_x,
+            sun_center_y,
+            rsun_pixels,
+            carrington_center_longitude,
+            observer_latitude,
+            rotation_degrees,
+        )
+        ax.plot(
+            pixel_x,
+            pixel_y,
+            color=OVERLAY_LINE_COLOR,
+            linewidth=OVERLAY_LINE_WIDTH,
+            alpha=OVERLAY_ALPHA,
+            solid_capstyle='round',
+        )
+        label_latitude_line(ax, pixel_x, pixel_y, latitude)
+
+    first_longitude = int(np.floor((carrington_center_longitude - 90) / OVERLAY_GRID_SPACING_DEGREES))
+    last_longitude = int(np.ceil((carrington_center_longitude + 90) / OVERLAY_GRID_SPACING_DEGREES))
+    for longitude_index in range(first_longitude, last_longitude + 1):
+        longitude = longitude_index * OVERLAY_GRID_SPACING_DEGREES
+        if abs(wrap_longitude_delta_degrees(longitude, carrington_center_longitude)) > 90:
+            continue
+
+        pixel_x, pixel_y = sample_carrington_line(
+            np.full(latitude_samples.shape, longitude, dtype=float),
+            latitude_samples,
+            sun_center_x,
+            sun_center_y,
+            rsun_pixels,
+            carrington_center_longitude,
+            observer_latitude,
+            rotation_degrees,
+        )
+        ax.plot(
+            pixel_x,
+            pixel_y,
+            color=OVERLAY_LINE_COLOR,
+            linewidth=OVERLAY_LINE_WIDTH,
+            alpha=OVERLAY_ALPHA,
+            solid_capstyle='round',
+        )
+        label_longitude_line(
+            ax,
+            pixel_x,
+            pixel_y,
+            longitude,
+            latitude_samples,
+            label=format_carrington_degree_label(longitude),
+        )
+
+    limb_theta = np.linspace(0, 2 * np.pi, 1441)
+    ax.plot(
+        sun_center_x + rsun_pixels * np.cos(limb_theta),
+        sun_center_y + rsun_pixels * np.sin(limb_theta),
+        color=OVERLAY_LIMB_COLOR,
+        linewidth=OVERLAY_LIMB_WIDTH,
+        alpha=OVERLAY_ALPHA,
+    )
+
+
 def add_overlay_max_marker(ax, pixel_x, pixel_y):
     if (
         pixel_x < 0
@@ -256,10 +400,11 @@ def save_plot(fig, output_path, transparent=False):
 @click.option('-i', '--input', 'fits_file', required=True, help='Input FITS file containing solar image data.')
 @click.option('-o', '--output', 'output_file', default=None, help='Output file to save the calculated prominence area.')
 @click.option('-p', '--plot', 'plot_file', default=None, help='Optional plot file to save the prominence area visualization.')
-@click.option('--overlay', 'overlay_plot_file', default=None, help='Optional transparent overlay file to save the solar latitude/longitude grid.')
+@click.option('--layout', '--overlay', 'overlay_plot_file', default=None, help='Optional transparent layout file to save the apparent solar latitude/longitude grid.')
+@click.option('--carrington', 'carrington_plot_file', default=None, help='Optional transparent layout file to save the Carrington latitude/longitude grid.')
 @click.option('-d', '--data', 'output_data_file', default=None, help='Optional file to save the output data.')
 
-def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=0, minimal_pixels_of_connected_region=1, cap_value_of_the_intensity=None, plot_width=3, plot_height=3, fits_file=None, output_file=None, plot_file=None, overlay_plot_file=None, output_data_file=None):
+def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=0, minimal_pixels_of_connected_region=1, cap_value_of_the_intensity=None, plot_width=3, plot_height=3, fits_file=None, output_file=None, plot_file=None, overlay_plot_file=None, carrington_plot_file=None, output_data_file=None):
     # Read the FITS file
     with fits.open(fits_file) as ff:
         #print(ff[1].header)
@@ -384,6 +529,16 @@ def calculate_prominence_area(pixels_to_extend_for_sun_disk=0, intensity_cutoff=
             # Keep the invisible timestamp footprint so the saved overlay matches the main image size.
             add_obs_time_text(ax, ff_header.get('DATE-OBS', 'Unknown'), alpha=0)
             save_plot(fig, overlay_plot_file, transparent=True)
+
+        if carrington_plot_file:
+            fig, ax = plt.subplots(figsize=(plot_width, plot_height))
+            fig.patch.set_alpha(0)
+            ax.patch.set_alpha(0)
+            plot_carrington_overlay(ax, ff_data, ff_header)
+            add_overlay_max_marker(ax, intensity_max_pixel_x, intensity_max_pixel_y)
+            # Keep the invisible timestamp footprint so the saved overlay matches the main image size.
+            add_obs_time_text(ax, ff_header.get('DATE-OBS', 'Unknown'), alpha=0)
+            save_plot(fig, carrington_plot_file, transparent=True)
 
 
 if __name__ == "__main__":
