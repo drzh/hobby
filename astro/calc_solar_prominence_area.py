@@ -10,11 +10,15 @@ import click
 import numpy as np
 from astropy.io import fits
 from astropy import units as u
+from astropy.coordinates import SkyCoord
 from scipy import ndimage
+import sunpy.map
+from sunpy.coordinates import frames
 from sunpy.visualization.colormaps import color_tables
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-from matplotlib.patches import Rectangle
+from matplotlib.patches import PathPatch, Rectangle
+from matplotlib.path import Path
 from datetime import datetime, timezone
 
 
@@ -33,6 +37,7 @@ OVERLAY_MAX_MARKER_RADIUS_PIXELS = 10
 OVERLAY_MAX_MARKER_LENGTH_PIXELS = OVERLAY_MAX_MARKER_RADIUS_PIXELS * 2 + 1
 OVERLAY_MAX_MARKER_LINE_WIDTH = 0.8
 OVERLAY_MAX_MARKER_ALPHA = 0.95
+OVERLAY_LIMB_CROSSING_PAD_SAMPLES = 1
 
 
 def format_obs_time(obs_time_str):
@@ -52,31 +57,27 @@ def add_obs_time_text(ax, obs_time_str, color='white', alpha=1.0):
     )
 
 
-def sample_equatorial_line(longitudes_deg, latitudes_deg, sun_center_x, sun_center_y, sun_radius_pixels):
-    longitude_radians = np.deg2rad(np.asarray(longitudes_deg, dtype=float))
-    latitude_radians = np.deg2rad(np.asarray(latitudes_deg, dtype=float))
-    pixel_x = sun_center_x + sun_radius_pixels * np.cos(latitude_radians) * np.sin(longitude_radians)
-    pixel_y = sun_center_y + sun_radius_pixels * np.sin(latitude_radians)
-    return pixel_x, pixel_y
-
-
 def wrap_longitude_delta_degrees(longitudes_deg, center_longitude_deg):
     return (np.asarray(longitudes_deg, dtype=float) - center_longitude_deg + 180) % 360 - 180
 
 
-def sample_carrington_line(
-    longitudes_deg,
-    latitudes_deg,
-    sun_center_x,
-    sun_center_y,
-    sun_radius_pixels,
-    carrington_center_longitude,
-    observer_latitude,
-    rotation_degrees=0,
-):
-    longitude_delta_radians = np.deg2rad(wrap_longitude_delta_degrees(longitudes_deg, carrington_center_longitude))
+def create_solar_map(ff_data, ff_header):
+    return sunpy.map.Map(ff_data, ff_header)
+
+
+def get_observer_carrington_longitude(solar_map):
+    observer_carrington = solar_map.observer_coordinate.transform_to(
+        frames.HeliographicCarrington(observer='self')
+    )
+    return observer_carrington.lon.to_value(u.deg)
+
+
+def visible_heliographic_points(longitudes_deg, latitudes_deg, observer_longitude_deg, observer_latitude_deg):
+    longitude_delta_radians = np.deg2rad(
+        wrap_longitude_delta_degrees(longitudes_deg, observer_longitude_deg)
+    )
     latitude_radians = np.deg2rad(np.asarray(latitudes_deg, dtype=float))
-    observer_latitude_radians = np.deg2rad(observer_latitude)
+    observer_latitude_radians = np.deg2rad(observer_latitude_deg)
 
     cos_latitude = np.cos(latitude_radians)
     sin_latitude = np.sin(latitude_radians)
@@ -84,28 +85,68 @@ def sample_carrington_line(
     sin_observer_latitude = np.sin(observer_latitude_radians)
     cos_longitude_delta = np.cos(longitude_delta_radians)
 
-    offset_x = sun_radius_pixels * cos_latitude * np.sin(longitude_delta_radians)
-    offset_y = sun_radius_pixels * (
-        sin_latitude * cos_observer_latitude
-        - cos_latitude * cos_longitude_delta * sin_observer_latitude
-    )
-    visible = (
+    return (
         sin_latitude * sin_observer_latitude
         + cos_latitude * cos_longitude_delta * cos_observer_latitude
     ) >= 0
 
-    rotation_radians = np.deg2rad(rotation_degrees)
-    if rotation_radians != 0:
-        rotated_x = offset_x * np.cos(rotation_radians) - offset_y * np.sin(rotation_radians)
-        rotated_y = offset_x * np.sin(rotation_radians) + offset_y * np.cos(rotation_radians)
-    else:
-        rotated_x = offset_x
-        rotated_y = offset_y
 
-    pixel_x = sun_center_x + rotated_x
-    pixel_y = sun_center_y + rotated_y
+def pad_visible_line_mask(visible):
+    padded = np.asarray(visible, dtype=bool).copy()
+    if padded.ndim != 1 or padded.size < 2:
+        return padded
+
+    for _ in range(OVERLAY_LIMB_CROSSING_PAD_SAMPLES):
+        previous = padded.copy()
+        padded[:-1] |= previous[1:]
+        padded[1:] |= previous[:-1]
+    return padded
+
+
+def heliographic_to_pixel(
+    solar_map,
+    longitudes_deg,
+    latitudes_deg,
+    frame,
+    observer_longitude_deg,
+    observer_latitude_deg,
+):
+    frame_kwargs = {
+        'obstime': solar_map.date,
+    }
+    if frame is frames.HeliographicCarrington:
+        frame_kwargs['observer'] = solar_map.observer_coordinate
+
+    coordinates = SkyCoord(
+        np.asarray(longitudes_deg, dtype=float) * u.deg,
+        np.asarray(latitudes_deg, dtype=float) * u.deg,
+        radius=solar_map.rsun_meters,
+        frame=frame,
+        **frame_kwargs,
+    )
+    pixel_coordinates = solar_map.world_to_pixel(coordinates.transform_to(solar_map.coordinate_frame))
+    pixel_x = pixel_coordinates.x.to_value(u.pix)
+    pixel_y = pixel_coordinates.y.to_value(u.pix)
+    visible = visible_heliographic_points(
+        longitudes_deg,
+        latitudes_deg,
+        observer_longitude_deg,
+        observer_latitude_deg,
+    )
+    visible = pad_visible_line_mask(visible)
     visible &= np.isfinite(pixel_x) & np.isfinite(pixel_y)
     return np.where(visible, pixel_x, np.nan), np.where(visible, pixel_y, np.nan)
+
+
+def helioprojective_limb_to_pixel(solar_map):
+    limb_theta = np.linspace(0, 2 * np.pi, 1441)
+    limb_coordinates = SkyCoord(
+        solar_map.rsun_obs * np.cos(limb_theta),
+        solar_map.rsun_obs * np.sin(limb_theta),
+        frame=solar_map.coordinate_frame,
+    )
+    pixel_coordinates = solar_map.world_to_pixel(limb_coordinates)
+    return pixel_coordinates.x.to_value(u.pix), pixel_coordinates.y.to_value(u.pix)
 
 
 def pixel_to_overlay_lat_lon_degrees(pixel_x, pixel_y, sun_center_x, sun_center_y, sun_radius_pixels):
@@ -142,8 +183,8 @@ def format_carrington_degree_label(value):
     return f'{int(round(value % 360))}\N{DEGREE SIGN}'
 
 
-def add_overlay_label(ax, x, y, label, ha, va):
-    ax.text(
+def add_overlay_label(ax, x, y, label, ha, va, clip_path=None):
+    text = ax.text(
         x,
         y,
         label,
@@ -154,9 +195,11 @@ def add_overlay_label(ax, x, y, label, ha, va):
         va=va,
         clip_on=True,
     )
+    if clip_path is not None:
+        text.set_clip_path(clip_path)
 
 
-def label_latitude_line(ax, pixel_x, pixel_y, latitude, label=None):
+def label_latitude_line(ax, pixel_x, pixel_y, latitude, label=None, clip_path=None):
     valid = np.isfinite(pixel_x) & np.isfinite(pixel_y)
     if not np.any(valid):
         return
@@ -169,10 +212,11 @@ def label_latitude_line(ax, pixel_x, pixel_y, latitude, label=None):
         label or format_degree_label(latitude),
         ha='left',
         va='center',
+        clip_path=clip_path,
     )
 
 
-def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg, label=None):
+def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg, label=None, clip_path=None):
     valid = np.isfinite(pixel_x) & np.isfinite(pixel_y)
     if not np.any(valid):
         return
@@ -191,167 +235,176 @@ def label_longitude_line(ax, pixel_x, pixel_y, longitude, latitudes_deg, label=N
         label or format_degree_label(longitude),
         ha='center',
         va='bottom',
+        clip_path=clip_path,
+    )
+
+
+def setup_overlay_axes(ax, ff_data):
+    ylen, xlen = ff_data.shape
+    ax.imshow(np.zeros_like(ff_data), origin='lower', aspect=1, alpha=0)
+    ax.set_xlim(-0.5, xlen - 0.5)
+    ax.set_ylim(-0.5, ylen - 0.5)
+    ax.set_aspect(1)
+    ax.axis('off')
+
+
+def create_limb_clip_path(ax, solar_map):
+    pixel_x, pixel_y = helioprojective_limb_to_pixel(solar_map)
+    valid = np.isfinite(pixel_x) & np.isfinite(pixel_y)
+    if np.count_nonzero(valid) < 3:
+        return None
+
+    limb_path = Path(np.column_stack((pixel_x[valid], pixel_y[valid])), closed=True)
+    return PathPatch(limb_path, transform=ax.transData)
+
+
+def plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path):
+    line, = ax.plot(
+        pixel_x,
+        pixel_y,
+        color=OVERLAY_LINE_COLOR,
+        linewidth=OVERLAY_LINE_WIDTH,
+        alpha=OVERLAY_ALPHA,
+        solid_capstyle='round',
+    )
+    if clip_path is not None:
+        line.set_clip_path(clip_path)
+
+
+def draw_overlay_limb(ax, solar_map):
+    pixel_x, pixel_y = helioprojective_limb_to_pixel(solar_map)
+    ax.plot(
+        pixel_x,
+        pixel_y,
+        color=OVERLAY_LIMB_COLOR,
+        linewidth=OVERLAY_LIMB_WIDTH,
+        alpha=OVERLAY_ALPHA,
     )
 
 
 def plot_lat_lon_overlay(ax, ff_data, ff_header):
-    ylen, xlen = ff_data.shape
-    sun_center_x = ff_header['CRPIX1'] - 1
-    sun_center_y = ff_header['CRPIX2'] - 1
-    rsun_arcsec = ff_header['RSUN_OBS']
-    cdelt1 = ff_header['CDELT1']
-    cdelt2 = ff_header['CDELT2']
-    rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
+    solar_map = create_solar_map(ff_data, ff_header)
+    observer_longitude = solar_map.observer_coordinate.lon.to_value(u.deg)
+    observer_latitude = solar_map.observer_coordinate.lat.to_value(u.deg)
 
-    ax.imshow(np.zeros_like(ff_data), origin='lower', aspect=1, alpha=0)
-    ax.set_xlim(-0.5, xlen - 0.5)
-    ax.set_ylim(-0.5, ylen - 0.5)
-    ax.set_aspect(1)
-    ax.axis('off')
+    setup_overlay_axes(ax, ff_data)
+    clip_path = create_limb_clip_path(ax, solar_map)
 
     latitude_samples = np.linspace(-90, 90, 721)
-    longitude_samples = np.linspace(-90, 90, 721)
+    longitude_offsets = np.linspace(-180, 180, 1441)
     grid_values = range(
         -90 + OVERLAY_GRID_SPACING_DEGREES,
         90,
         OVERLAY_GRID_SPACING_DEGREES,
     )
+    longitude_grid_values = range(
+        -180 + OVERLAY_GRID_SPACING_DEGREES,
+        180,
+        OVERLAY_GRID_SPACING_DEGREES,
+    )
 
     for latitude in grid_values:
-        pixel_x, pixel_y = sample_equatorial_line(
-            longitude_samples,
-            np.full(longitude_samples.shape, latitude, dtype=float),
-            sun_center_x,
-            sun_center_y,
-            rsun_pixels,
+        longitudes_deg = observer_longitude + longitude_offsets
+        pixel_x, pixel_y = heliographic_to_pixel(
+            solar_map,
+            longitudes_deg,
+            np.full(longitudes_deg.shape, latitude, dtype=float),
+            frames.HeliographicStonyhurst,
+            observer_longitude,
+            observer_latitude,
         )
-        ax.plot(
-            pixel_x,
-            pixel_y,
-            color=OVERLAY_LINE_COLOR,
-            linewidth=OVERLAY_LINE_WIDTH,
-            alpha=OVERLAY_ALPHA,
-            solid_capstyle='round',
-        )
-        label_latitude_line(ax, pixel_x, pixel_y, latitude)
+        plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path)
+        label_latitude_line(ax, pixel_x, pixel_y, latitude, clip_path=clip_path)
 
-    for longitude in grid_values:
-        pixel_x, pixel_y = sample_equatorial_line(
-            np.full(latitude_samples.shape, longitude, dtype=float),
+    for longitude_offset in longitude_grid_values:
+        longitudes_deg = np.full(
+            latitude_samples.shape,
+            observer_longitude + longitude_offset,
+            dtype=float,
+        )
+        pixel_x, pixel_y = heliographic_to_pixel(
+            solar_map,
+            longitudes_deg,
             latitude_samples,
-            sun_center_x,
-            sun_center_y,
-            rsun_pixels,
+            frames.HeliographicStonyhurst,
+            observer_longitude,
+            observer_latitude,
         )
-        ax.plot(
-            pixel_x,
-            pixel_y,
-            color=OVERLAY_LINE_COLOR,
-            linewidth=OVERLAY_LINE_WIDTH,
-            alpha=OVERLAY_ALPHA,
-            solid_capstyle='round',
-        )
-        label_longitude_line(ax, pixel_x, pixel_y, longitude, latitude_samples)
+        plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path)
+        if abs(longitude_offset) < 90:
+            label_longitude_line(
+                ax,
+                pixel_x,
+                pixel_y,
+                longitude_offset,
+                latitude_samples,
+                clip_path=clip_path,
+            )
 
-    limb_theta = np.linspace(0, 2 * np.pi, 1441)
-    ax.plot(
-        sun_center_x + rsun_pixels * np.cos(limb_theta),
-        sun_center_y + rsun_pixels * np.sin(limb_theta),
-        color=OVERLAY_LIMB_COLOR,
-        linewidth=OVERLAY_LIMB_WIDTH,
-        alpha=OVERLAY_ALPHA,
-    )
+    draw_overlay_limb(ax, solar_map)
 
 
 def plot_carrington_overlay(ax, ff_data, ff_header):
-    ylen, xlen = ff_data.shape
-    sun_center_x = ff_header['CRPIX1'] - 1
-    sun_center_y = ff_header['CRPIX2'] - 1
-    rsun_arcsec = ff_header['RSUN_OBS']
-    cdelt1 = ff_header['CDELT1']
-    cdelt2 = ff_header['CDELT2']
-    rsun_pixels = rsun_arcsec / ((cdelt1 + cdelt2) / 2)
-    carrington_center_longitude = ff_header['CRLN_OBS']
-    observer_latitude = ff_header['CRLT_OBS']
-    rotation_degrees = ff_header.get('CROTA2', 0) or 0
+    solar_map = create_solar_map(ff_data, ff_header)
+    carrington_center_longitude = get_observer_carrington_longitude(solar_map)
+    observer_latitude = solar_map.observer_coordinate.lat.to_value(u.deg)
 
-    ax.imshow(np.zeros_like(ff_data), origin='lower', aspect=1, alpha=0)
-    ax.set_xlim(-0.5, xlen - 0.5)
-    ax.set_ylim(-0.5, ylen - 0.5)
-    ax.set_aspect(1)
-    ax.axis('off')
+    setup_overlay_axes(ax, ff_data)
+    clip_path = create_limb_clip_path(ax, solar_map)
 
     latitude_samples = np.linspace(-90, 90, 721)
-    longitude_samples = carrington_center_longitude + np.linspace(-180, 180, 1441)
+    longitude_offsets = np.linspace(-180, 180, 1441)
     grid_values = range(
         -90 + OVERLAY_GRID_SPACING_DEGREES,
         90,
         OVERLAY_GRID_SPACING_DEGREES,
     )
-
     for latitude in grid_values:
-        pixel_x, pixel_y = sample_carrington_line(
-            longitude_samples,
-            np.full(longitude_samples.shape, latitude, dtype=float),
-            sun_center_x,
-            sun_center_y,
-            rsun_pixels,
+        longitudes_deg = carrington_center_longitude + longitude_offsets
+        pixel_x, pixel_y = heliographic_to_pixel(
+            solar_map,
+            longitudes_deg,
+            np.full(longitudes_deg.shape, latitude, dtype=float),
+            frames.HeliographicCarrington,
             carrington_center_longitude,
             observer_latitude,
-            rotation_degrees,
         )
-        ax.plot(
-            pixel_x,
-            pixel_y,
-            color=OVERLAY_LINE_COLOR,
-            linewidth=OVERLAY_LINE_WIDTH,
-            alpha=OVERLAY_ALPHA,
-            solid_capstyle='round',
-        )
-        label_latitude_line(ax, pixel_x, pixel_y, latitude)
+        plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path)
+        label_latitude_line(ax, pixel_x, pixel_y, latitude, clip_path=clip_path)
 
-    first_longitude = int(np.floor((carrington_center_longitude - 90) / OVERLAY_GRID_SPACING_DEGREES))
-    last_longitude = int(np.ceil((carrington_center_longitude + 90) / OVERLAY_GRID_SPACING_DEGREES))
+    first_longitude = int(np.floor(
+        (carrington_center_longitude - 180 + OVERLAY_GRID_SPACING_DEGREES)
+        / OVERLAY_GRID_SPACING_DEGREES
+    ))
+    last_longitude = int(np.ceil(
+        (carrington_center_longitude + 180 - OVERLAY_GRID_SPACING_DEGREES)
+        / OVERLAY_GRID_SPACING_DEGREES
+    ))
     for longitude_index in range(first_longitude, last_longitude + 1):
         longitude = longitude_index * OVERLAY_GRID_SPACING_DEGREES
-        if abs(wrap_longitude_delta_degrees(longitude, carrington_center_longitude)) > 90:
-            continue
+        longitude_delta = wrap_longitude_delta_degrees(longitude, carrington_center_longitude)
 
-        pixel_x, pixel_y = sample_carrington_line(
+        pixel_x, pixel_y = heliographic_to_pixel(
+            solar_map,
             np.full(latitude_samples.shape, longitude, dtype=float),
             latitude_samples,
-            sun_center_x,
-            sun_center_y,
-            rsun_pixels,
+            frames.HeliographicCarrington,
             carrington_center_longitude,
             observer_latitude,
-            rotation_degrees,
         )
-        ax.plot(
-            pixel_x,
-            pixel_y,
-            color=OVERLAY_LINE_COLOR,
-            linewidth=OVERLAY_LINE_WIDTH,
-            alpha=OVERLAY_ALPHA,
-            solid_capstyle='round',
-        )
-        label_longitude_line(
-            ax,
-            pixel_x,
-            pixel_y,
-            longitude,
-            latitude_samples,
-            label=format_carrington_degree_label(longitude),
-        )
+        plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path)
+        if abs(longitude_delta) < 90:
+            label_longitude_line(
+                ax,
+                pixel_x,
+                pixel_y,
+                longitude,
+                latitude_samples,
+                label=format_carrington_degree_label(longitude),
+                clip_path=clip_path,
+            )
 
-    limb_theta = np.linspace(0, 2 * np.pi, 1441)
-    ax.plot(
-        sun_center_x + rsun_pixels * np.cos(limb_theta),
-        sun_center_y + rsun_pixels * np.sin(limb_theta),
-        color=OVERLAY_LIMB_COLOR,
-        linewidth=OVERLAY_LIMB_WIDTH,
-        alpha=OVERLAY_ALPHA,
-    )
+    draw_overlay_limb(ax, solar_map)
 
 
 def add_overlay_max_marker(ax, pixel_x, pixel_y):
