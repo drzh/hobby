@@ -149,6 +149,21 @@ def helioprojective_limb_to_pixel(solar_map):
     return pixel_coordinates.x.to_value(u.pix), pixel_coordinates.y.to_value(u.pix)
 
 
+def apparent_lat_lon_to_pixel(solar_map, longitudes_deg, latitudes_deg):
+    longitude_radians = np.deg2rad(np.asarray(longitudes_deg, dtype=float))
+    latitude_radians = np.deg2rad(np.asarray(latitudes_deg, dtype=float))
+    coordinates = SkyCoord(
+        solar_map.rsun_obs * np.cos(latitude_radians) * np.sin(longitude_radians),
+        solar_map.rsun_obs * np.sin(latitude_radians),
+        frame=solar_map.coordinate_frame,
+    )
+    pixel_coordinates = solar_map.world_to_pixel(coordinates)
+    pixel_x = pixel_coordinates.x.to_value(u.pix)
+    pixel_y = pixel_coordinates.y.to_value(u.pix)
+    finite = np.isfinite(pixel_x) & np.isfinite(pixel_y)
+    return np.where(finite, pixel_x, np.nan), np.where(finite, pixel_y, np.nan)
+
+
 def pixel_to_overlay_lat_lon_degrees(pixel_x, pixel_y, sun_center_x, sun_center_y, sun_radius_pixels):
     if (
         pixel_x < 0
@@ -284,62 +299,42 @@ def draw_overlay_limb(ax, solar_map):
 
 def plot_lat_lon_overlay(ax, ff_data, ff_header):
     solar_map = create_solar_map(ff_data, ff_header)
-    observer_longitude = solar_map.observer_coordinate.lon.to_value(u.deg)
-    observer_latitude = solar_map.observer_coordinate.lat.to_value(u.deg)
 
     setup_overlay_axes(ax, ff_data)
     clip_path = create_limb_clip_path(ax, solar_map)
 
     latitude_samples = np.linspace(-90, 90, 721)
-    longitude_offsets = np.linspace(-180, 180, 1441)
+    longitude_samples = np.linspace(-90, 90, 721)
     grid_values = range(
         -90 + OVERLAY_GRID_SPACING_DEGREES,
         90,
         OVERLAY_GRID_SPACING_DEGREES,
     )
-    longitude_grid_values = range(
-        -180 + OVERLAY_GRID_SPACING_DEGREES,
-        180,
-        OVERLAY_GRID_SPACING_DEGREES,
-    )
 
     for latitude in grid_values:
-        longitudes_deg = observer_longitude + longitude_offsets
-        pixel_x, pixel_y = heliographic_to_pixel(
+        pixel_x, pixel_y = apparent_lat_lon_to_pixel(
             solar_map,
-            longitudes_deg,
-            np.full(longitudes_deg.shape, latitude, dtype=float),
-            frames.HeliographicStonyhurst,
-            observer_longitude,
-            observer_latitude,
+            longitude_samples,
+            np.full(longitude_samples.shape, latitude, dtype=float),
         )
         plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path)
         label_latitude_line(ax, pixel_x, pixel_y, latitude, clip_path=clip_path)
 
-    for longitude_offset in longitude_grid_values:
-        longitudes_deg = np.full(
-            latitude_samples.shape,
-            observer_longitude + longitude_offset,
-            dtype=float,
-        )
-        pixel_x, pixel_y = heliographic_to_pixel(
+    for longitude in grid_values:
+        pixel_x, pixel_y = apparent_lat_lon_to_pixel(
             solar_map,
-            longitudes_deg,
+            np.full(latitude_samples.shape, longitude, dtype=float),
             latitude_samples,
-            frames.HeliographicStonyhurst,
-            observer_longitude,
-            observer_latitude,
         )
         plot_overlay_grid_line(ax, pixel_x, pixel_y, clip_path)
-        if abs(longitude_offset) < 90:
-            label_longitude_line(
-                ax,
-                pixel_x,
-                pixel_y,
-                longitude_offset,
-                latitude_samples,
-                clip_path=clip_path,
-            )
+        label_longitude_line(
+            ax,
+            pixel_x,
+            pixel_y,
+            longitude,
+            latitude_samples,
+            clip_path=clip_path,
+        )
 
     draw_overlay_limb(ax, solar_map)
 
